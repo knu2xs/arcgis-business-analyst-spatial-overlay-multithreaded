@@ -21,6 +21,13 @@ import arcpy
 import multiprocessing
 from functools import partial
 
+# import the BA toolbox...it is not automatically loaded
+ba_toolbox_path = r'C:\Program Files (x86)\ArcGIS\Desktop10.5\Business Analyst\ArcToolbox\Toolboxes\Business Analyst Tools.tbx'
+arcpy.ImportToolbox(ba_toolbox_path)
+
+# ensure BA extension is checked out
+arcpy.CheckExtension('Business')
+
 
 def doWork(BDSLayer, DriveTimesInput, oid):
     """
@@ -35,24 +42,36 @@ def doWork(BDSLayer, DriveTimesInput, oid):
 
             If the Overlay succeeds then it returns TRUE else FALSE.
     """
-    try:
-        # Each overlay layer needs a unique name, so use oid
-        arcpy.MakeFeatureLayer_management(DriveTimesInput, "DriveTimesInput_" + str(oid))[0]
+    # define the attributes to use for spatial overlay...enrichment variables
+    DataToAppend = "TOTPOP_CY;HHPOP_CY"
 
-        # Select the polygon in the layer, this means the clip tool will use only that polygon
-        descObj = arcpy.Describe(DriveTimesInput)
-        field = descObj.OIDFieldName
-        df = arcpy.AddFieldDelimiters(DriveTimesInput, field)
-        query = df + " = " + str(oid)
-        arcpy.SelectLayerByAttribute_management("DriveTimesInput_" + str(oid), "NEW_SELECTION", query)
+    # Each overlay layer needs a unique name, so use oid
+    drive_time_layer = arcpy.MakeFeatureLayer_management(DriveTimesInput, "DriveTimesInput_{}".format(oid))[0]
 
-        # Do the SpatialOverlay
-        outFC = r"c:\temp\tc\clip_" + str(oid) + ".shp"
-        arcpy.SpatialOverlay_ba(BDSLayer, "DriveTimes_Input_" + str(oid), DataToAppend, outFC, "true", "false")
-        return True
-    except:
-        # Some error occurred so return False
-        return False
+    # Select the polygon in the layer, this means the clip tool will use only that polygon
+    df = arcpy.AddFieldDelimiters(
+        datasource=DriveTimesInput,
+        field=arcpy.Describe(DriveTimesInput).OIDFieldName
+    )
+    query = "{} = {}".format(df, oid)
+    arcpy.SelectLayerByAttribute_management(drive_time_layer, "NEW_SELECTION", query)
+
+    # Do the SpatialOverlay
+    outFC = os.path.join(arcpy.env.scratchGDB, 'clip_{}'.format(oid))
+    output = arcpy.SpatialOverlay_ba(
+        InputFeatureLayer=BDSLayer,
+        OverlayLayer=drive_time_layer,
+        SelectedSummarizations=DataToAppend,
+        OutputFeatureClass=outFC,
+        SpatialOverlayAppendData=False,  # cannot append, as it will throw an error after the first run
+        UseSelectedFeatures=True  # obviously want to limit analysis to speed up processing
+    )[0]
+
+    # take out the trash
+    arcpy.Delete_management(drive_time_layer)
+
+    # return the path to this output
+    return output
 
 
 def spatialoverlay(BDSLayer, DriveTimesInput):
@@ -78,10 +97,10 @@ def spatialoverlay(BDSLayer, DriveTimesInput):
 
         arcpy.AddMessage("Sending to pool")
         # declare number of cores to use, use 1 less than the max
-        cpuNum = multiprocessing.cpu_count() - 1
+        pool_count = multiprocessing.cpu_count() - 1
 
         # Create the pool object
-        pool = multiprocessing.Pool(processes=cpuNum)
+        pool = multiprocessing.Pool(processes=pool_count)
 
         # Fire off list to worker function.
         # res is a list that is created with what ever the worker function is returning
