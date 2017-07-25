@@ -16,7 +16,7 @@ DataToAppend = arcpy.GetParameterAsText(2)
 
 def main():  
     arcpy.AddMessage("Calling code...")  
-    SpatialOverlayWorkCode.spatialoverlay(BDSLayer,DriveTimesInput)
+    SpatialOverlayWorkCode.spaital_overlay_multithreaded(BDSLayer, DriveTimesInput)
 
 if __name__ == '__main__':  
     main()
