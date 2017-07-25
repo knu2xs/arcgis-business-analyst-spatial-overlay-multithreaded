@@ -1,22 +1,16 @@
 """
-    Title:
-        SpatialOverlayToolMP
-
-    Description:
-        This simple script is the script that is wired up into toolbox
+DOB: 24 Jul 2017
+Purpose: Very simple, wrapper for multithreaded spatial overlay.
+Author: Joel McCune - http://github.com/knu2xs
 """
-
-import arcpy  
-import SpatialOverlayWorkCode
+import spatial_overlay_utilities
+from arcpy import GetParameterAsText
 
 # Get parameters (These are Layer objects)  
-BDSLayer = arcpy.GetParameterAsText(0)  
-DriveTimesInput = arcpy.GetParameterAsText(1)
-DataToAppend = arcpy.GetParameterAsText(2)
+bds_layer = GetParameterAsText(0)
+target_polygons = GetParameterAsText(1)
+overlay_attributes = GetParameterAsText(2)
+output_feature_class = GetParameterAsText(3)
 
-def main():  
-    arcpy.AddMessage("Calling code...")  
-    SpatialOverlayWorkCode.spaital_overlay_multithreaded(BDSLayer, DriveTimesInput)
-
-if __name__ == '__main__':  
-    main()
+if __name__ == '__main__':
+    spatial_overlay_utilities.spaital_overlay_multithreaded(bds_layer, target_polygons, overlay_attributes)
