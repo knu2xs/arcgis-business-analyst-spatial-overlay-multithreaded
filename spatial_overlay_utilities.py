@@ -62,6 +62,35 @@ def spatial_overlay(bds_layer, target_feature_class, overlay_attributes, where_c
     return output
 
 
+def get_chunk_where_clause_list(feature_class, chunk_count):
+    """
+    Return a list of SQL where clauses based on the number of subchunks desired for the target feature class.
+    :param feature_class: Feature class to create SQL where clauses to subsetlect the data.
+    :param chunk_count: Count of subchunks to identify using where clauses.
+    :return: List of where clauses identifying the data subsets.
+    """
+    # calculate how many features should be in each chunk
+    chunk_size = int(math.ceil(float(arcpy.GetCount_management(feature_class)[0]) / chunk_count))
+
+    # get the name of the OID field
+    oid_field = arcpy.Describe(feature_class).OIDFieldName
+
+    # get a list of all OID values
+    oid_list = [_[0] for _ in arcpy.da.SearchCursor(feature_class, oid_field)]
+
+    # split the OID list into chunked sublists
+    chunk_list = [oid_list[x:x + chunk_size] for x in xrange(0, len(oid_list), chunk_size)]
+
+    # iterate the list of chunks and assemble a complete sql query to select the features in the chunk
+    chunk_sql_list = [
+        ' OR '.join(['{0} = {1}'.format(oid_field, oid) for oid in oid_chunk])
+        for oid_chunk in chunk_list
+    ]
+
+    # return the chunk list
+    return chunk_sql_list
+
+
 def spaital_overlay_multithreaded(bds_layer, target_feature_class, overlay_attributes, output_feature_class):
     """
     Perform spatial overlay (apportionment) to the new target feature class using multiple cores via the multithreading
@@ -75,29 +104,14 @@ def spaital_overlay_multithreaded(bds_layer, target_feature_class, overlay_attri
     # utilize one less thread than the maximum available
     thread_count = multiprocessing.cpu_count() - 1
 
-    # calculate how many features should be in each chunk
-    chunk_size = int(math.ceil(float(arcpy.GetCount_management(target_feature_class)[0]) / thread_count))
+    # get a list of sql where clauses to select subsets of data for multithreaded analysis
+    chunk_sql_list = get_chunk_where_clause_list(target_feature_class, thread_count)
 
-    # get the name of the OID field
-    oid_field = arcpy.Describe(target_feature_class).OIDFieldName
-
-    # get a list of all OID values
-    oid_list = [_[0] for _ in arcpy.da.SearchCursor(target_feature_class, oid_field)]
-
-    # split the OID list into chunked sublists
-    chunk_list = [oid_list[x:x + chunk_size] for x in xrange(0, len(oid_list), chunk_size)]
-
-    # iterate the list of chunks and assemble a complete sql query to select the features in the chunk
-    chunk_sql_list = [
-        ' OR '.join(['{0} = {1}'.format(oid_field, oid) for oid in oid_chunk])
-        for oid_chunk in chunk_list
-    ]
-
-    # ensure data paths are being used, since multiprocessing has trouble with layer objects
+    # ensure data paths are being used, since multiprocessing pukes on layer objects
     bds_path = arcpy.Describe(bds_layer).catalogPath
     target_path = arcpy.Describe(target_feature_class).catalogPath
 
-    # use partial to set the constant arguments
+    # use partial to set the constant arguments to use with multithreading pool
     partial_spatial_overlay = partial(spatial_overlay, bds_path, target_path, overlay_attributes)
 
     # create pool object instance
@@ -107,8 +121,8 @@ def spaital_overlay_multithreaded(bds_layer, target_feature_class, overlay_attri
     multithreading_feature_class_list = pool.map(partial_spatial_overlay, chunk_sql_list)
 
     # close and join the pool process
-    pool.close()
-    pool.join()
+    pool.close()  # get rid of pool worker processes
+    pool.join()  # ensure all processes are complete
 
-    # now, union the results back into a single feature class
+    # now, merge the results into a single feature class
     return arcpy.Merge_management(multithreading_feature_class_list, output_feature_class)[0]
