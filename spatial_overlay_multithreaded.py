@@ -13,4 +13,9 @@ overlay_attributes = GetParameterAsText(2)
 output_feature_class = GetParameterAsText(3)
 
 if __name__ == '__main__':
-    spatial_overlay_utilities.spaital_overlay_multithreaded(bds_layer, target_polygons, overlay_attributes)
+    spatial_overlay_utilities.spaital_overlay_multithreaded(
+        bds_layer=bds_layer, 
+        target_feature_class=target_polygons,
+        overlay_attributes=overlay_attributes,
+        output_feature_class=output_feature_class
+    )
