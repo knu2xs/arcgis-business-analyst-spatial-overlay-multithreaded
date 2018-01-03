@@ -16,7 +16,7 @@ ba_toolbox_path = r'C:\Program Files (x86)\ArcGIS\Desktop10.5\Business Analyst\A
 arcpy.ImportToolbox(ba_toolbox_path)
 
 # ensure BA extension is checked out
-arcpy.CheckExtension('Business')
+arcpy.CheckOutExtension('Business')
 
 
 def _get_uid():
@@ -45,7 +45,7 @@ def spatial_overlay(bds_layer, target_feature_class, overlay_attributes, where_c
         arcpy.SelectLayerByAttribute_management(target_layer, "NEW_SELECTION", where_clause)
 
     # perform spatial overlay
-    output_feature_class = os.path.join(arcpy.env.scratchGDB, 'temp{}'.format(_get_uid()))
+    output_feature_class = os.path.join(arcpy.env.scratchFolder, 'temp{}'.format(_get_uid()))
     output = arcpy.SpatialOverlay_ba(
         InputFeatureLayer=bds_layer,
         OverlayLayer=target_layer,
